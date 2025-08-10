@@ -1,0 +1,9 @@
+opencv-python
+torch
+torchvision
+ultralytics
+mysql-connector-python
+easyocr
+numpy
+Flask
+Flask-CORS

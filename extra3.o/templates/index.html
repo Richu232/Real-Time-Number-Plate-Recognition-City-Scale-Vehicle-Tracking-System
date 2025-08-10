@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Detection Map & Timeline</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-timeline/7.7.0/vis-timeline-graph2d.min.css" />
+    
+    <style>
+        /* Fullscreen Map */
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            height: 100%;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Map Container */
+        .map-container {
+            display: flex;
+            flex: 3;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: linear-gradient(to bottom, #2c3e50, #34495e);
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .sidebar h2 {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar h2 .icon {
+            margin-right: 10px;
+        }
+
+        /* Node-style detection details */
+        .detection-details {
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .detection-node {
+            background: rgba(52, 73, 94, 0.7);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            padding: 15px;
+            position: relative;
+            border-left: 4px solid #3498db;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .detection-node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            background: rgba(52, 73, 94, 0.9);
+        }
+
+        .detection-node .node-number {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            width: 30px;
+            height: 30px;
+            background: #3498db;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 2px solid white;
+        }
+
+        .detection-node .node-content {
+            margin-left: 15px;
+        }
+
+        .detection-node .node-time {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+
+        .detection-node .node-location {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .detection-node .node-count {
+            display: inline-block;
+            background: #2ecc71;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .plate-info {
+            background: linear-gradient(to right, #2c3e50, #3498db);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .plate-info h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .plate-info p {
+            margin: 5px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /* Map */
+        #map {
+            flex: 1;
+            height: 100%;
+        }
+
+        /* Timeline */
+        .timeline-container {
+            flex: 1;
+            min-height: 200px;
+            border-top: 2px solid #2c3e50;
+            position: relative;
+            overflow: visible;
+        }
+
+        #timeline {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Floating Panel */
+        .floating-panel {
+            position: absolute;
+            top: 20px;
+            left: 340px; /* Adjusted to not overlay with sidebar */
+            background: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        /* Search Panel */
+        .search-panel {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
+        z-index: 1001; /* Increased z-index to ensure it's above other elements */
+        max-width: 300px;
+    }
+
+        .search-panel h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        .search-panel input, .search-panel select {
+            padding: 10px;
+            width: 100%;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .search-panel button {
+            padding: 10px 15px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+
+        .search-panel button:hover {
+            background: #3498db;
+        }
+        
+        /* Detection marker styles */
+        .detection-marker {
+            text-align: center;
+            font-weight: bold;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        
+        /* Timeline styles */
+        .vis-item {
+            border-color: #2c3e50;
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        
+        .vis-item .vis-item-content {
+            padding: 5px 8px;
+        }
+        
+        .vis-timeline {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        
+        /* For the plate image in the popup */
+        .popup-image {
+            max-width: 150px;
+            margin-top: 5px;
+            border-radius: 4px;
+        }
+        
+        /* Popup styling */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+        }
+        
+        .leaflet-popup-content {
+            margin: 12px;
+        }
+        
+        /* Route turns information */
+        .route-info-panel {
+        position: absolute;
+        bottom: 20px;
+        left: 340px; /* Moved from right to left to avoid overlap with search panel */
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        max-width: 300px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+        
+        .route-info-panel h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        
+        .route-turn {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .route-turn:last-child {
+            border-bottom: none;
+        }
+        
+        /* Timeline scrollbar */
+        .timeline-container::-webkit-scrollbar {
+            height: 8px;
+            background-color: #f5f5f5;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb {
+            background-color: #888;
+            border-radius: 4px;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb:hover {
+            background-color: #555;
+        }
+        
+        /* Additional UI improvements */
+        .node-connector {
+            position: absolute;
+            left: 5px;
+            top: 22px;
+            bottom: 0;
+            width: 2px;
+            background: rgba(52, 152, 219, 0.5);
+            z-index: 0;
+        }
+        
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: none;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Map Container -->
+        <div class="map-container">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <h2><span class="icon">🚗</span> Vehicle Tracking</h2>
+                <div class="plate-info">
+                    <h3 id="plate-display">No Plate Selected</h3>
+                    <p id="detection-count">Detections: 0</p>
+                </div>
+                <div id="detection-info" class="detection-details">
+                    <span>Search for a plate number to see detection details.</span>
+                </div>
+            </div>
+
+            <!-- Map -->
+            <div id="map"></div>
+        </div>
+        
+        <!-- Timeline -->
+        <div class="timeline-container">
+            <div id="timeline"></div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div class="loading-indicator" id="loading-indicator">
+        Loading data...
+    </div>
+
+    <!-- Floating Panel for Route Distance -->
+    <div class="floating-panel" id="distance-panel">No Route Selected</div>
+
+    <!-- Route Turns Information Panel -->
+    <div class="route-info-panel" id="route-turns-panel" style="display: none;">
+        <h3>Route Information</h3>
+        <div id="route-turns-content"></div>
+    </div>
+
+    <!-- Search Panel -->
+    <div class="search-panel">
+        <h3>Vehicle Tracking</h3>
+        <input type="text" id="plate-input" placeholder="Enter plate number">
+        <input type="date" id="date-input">
+        <select id="fuzzy-mode">
+            <option value="default">Default Fuzzy Matching</option>
+            <option value="strict">Strict Matching</option>
+            <option value="relaxed">Relaxed Matching</option>
+        </select>
+        <button id="search-btn">Search</button>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <!-- Timeline Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-timeline/7.7.0/vis-timeline-graph2d.min.js"></script>
+
+    <script>
+        // Initialize the map
+        var map = L.map('map').setView([18.5204, 73.8567], 12);
+
+        // Load OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Group for markers
+        var markersGroup = L.layerGroup().addTo(map);
+        
+        // Variable to store current route control
+        var currentRouteControl = null;
+
+        // Custom marker colors based on detection index
+        const markerColors = [
+            '#e74c3c', // Red
+            '#e67e22', // Orange
+            '#f1c40f', // Yellow
+            '#2ecc71', // Green
+            '#3498db', // Blue
+            '#9b59b6', // Purple
+            '#1abc9c', // Teal
+            '#d35400', // Dark Orange
+            '#27ae60', // Dark Green
+            '#2980b9'  // Dark Blue
+        ];
+
+        // Function to create a custom HTML marker
+        function createMarkerIcon(number) {
+            const colorIndex = (number - 1) % markerColors.length;
+            const markerHtml = `
+                <div class="detection-marker" style="background-color: ${markerColors[colorIndex]}; width: 32px; height: 32px; color: white;">
+                    ${number}
+                </div>
+            `;
+            
+            return L.divIcon({
+                html: markerHtml,
+                className: 'custom-marker',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        }
+
+        // Initialize Timeline
+        var timelineContainer = document.getElementById('timeline');
+        var timeline = new vis.Timeline(timelineContainer, [], {
+            zoomable: true,
+            horizontalScroll: true
+        });
+
+        // Function to format date for display
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString();
+        }
+
+        // Function to format time only
+        function formatTime(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        // Function to display vehicle detections on map and timeline
+        function displayDetections(data) {
+            // Show loading indicator
+            document.getElementById('loading-indicator').style.display = 'block';
+            
+            // Clear previous markers and route
+            markersGroup.clearLayers();
+            if (currentRouteControl) {
+                map.removeControl(currentRouteControl);
+                currentRouteControl = null;
+            }
+            
+            // Update plate info
+            document.getElementById('plate-display').textContent = `Plate: ${data.plate_number}`;
+            
+            // Check if we have any matches
+            if (!data.matches || data.matches.length === 0) {
+                document.getElementById('detection-count').textContent = `Detections: 0`;
+                document.getElementById('detection-info').innerHTML = `<span>No detections found for this plate number.</span>`;
+                document.getElementById('distance-panel').textContent = 'No Detections Found';
+                document.getElementById('route-turns-panel').style.display = 'none';
+                timeline.setItems([]);
+                document.getElementById('loading-indicator').style.display = 'none';
+                return;
+            }
+
+            // Use the actual structure from the API
+            let matches = data.matches;
+            document.getElementById('detection-count').textContent = `Locations: ${matches.length}`;
+            
+            // Prepare coordinates for routing
+            let coordinates = [];
+            let timelineItems = [];
+            let detectionDetails = '';
+            
+            // Add connector for visualization if multiple nodes
+            if (matches.length > 1) {
+                detectionDetails += '<div class="node-connector"></div>';
+            }
+            
+            // Add markers and prepare timeline items for each location group
+            matches.forEach((location, locationIndex) => {
+                // Skip locations without coordinates
+                if (!location.latitude || !location.longitude) return;
+                
+                const position = [parseFloat(location.latitude), parseFloat(location.longitude)];
+                coordinates.push(position);
+                const markerNumber = locationIndex + 1;
+                const colorIndex = locationIndex % markerColors.length;
+                
+                // Create marker with custom icon
+                const marker = L.marker(position, {
+                    icon: createMarkerIcon(markerNumber)
+                });
+                
+                // Create popup content
+                let popupContent = `
+                    <strong>Location #${markerNumber}</strong><br>
+                    Plate: ${location.plate_number}<br>
+                    Location: ${location.location_name || 'Unknown'}<br>
+                    Period: ${formatDate(location.start_time)} - ${formatDate(location.end_time)}<br>
+                    Count: ${location.count} detection(s)
+                `;
+                
+                // Add image if available
+                if (location.image_urls && location.image_urls.length > 0) {
+                    popupContent += `<br><img src="${location.image_urls[0]}" class="popup-image">`;
+                }
+                
+                marker.bindPopup(popupContent);
+                markersGroup.addLayer(marker);
+                
+                // Create timeline item - each location becomes a range on the timeline
+                timelineItems.push({
+                    id: markerNumber,
+                    content: `#${markerNumber}: ${location.location_name || 'Unknown'}`,
+                    start: new Date(location.start_time),
+                    end: new Date(location.end_time),
+                    title: `Plate: ${location.plate_number}, Location: ${location.location_name || 'Unknown'}, Detections: ${location.count}`,
+                    style: `border-color: ${markerColors[colorIndex]};`
+                });
+                
+                // Add to detection details in sidebar using node format
+                detectionDetails += `
+                    <div class="detection-node" style="border-left-color: ${markerColors[colorIndex]};">
+                        <div class="node-number" style="background-color: ${markerColors[colorIndex]};">${markerNumber}</div>
+                        <div class="node-content">
+                            <div class="node-location">${location.location_name || 'Unknown Location'}</div>
+                            <div class="node-time">
+                                <span>⏱️ ${formatTime(location.start_time)} - ${formatTime(location.end_time)}</span>
+                            </div>
+                            <div class="node-date">${new Date(location.start_time).toLocaleDateString()}</div>
+                            <span class="node-count">${location.count} detection(s)</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // Update sidebar with detection details
+            document.getElementById('detection-info').innerHTML = detectionDetails;
+            
+            // Only create route if we have multiple points
+            if (coordinates.length > 1) {
+                // Sort coordinates by detection time
+                let sortedCoordinates = [...coordinates]; // Create a copy of coordinates
+                
+                // Create a simple polyline first to ensure we have a visible route
+                let polyline = L.polyline(sortedCoordinates, {
+                    color: '#3498db',
+                    weight: 4,
+                    opacity: 0.7,
+                    lineJoin: 'round'
+                }).addTo(map);
+                
+                // Create waypoints for routing
+                const waypoints = sortedCoordinates.map(coord => L.latLng(coord[0], coord[1]));
+                
+                // Create route with OSRM
+                try {
+                    currentRouteControl = L.Routing.control({
+                        waypoints: waypoints,
+                        routeWhileDragging: false,
+                        showAlternatives: false,
+                        fitSelectedRoutes: false,
+                        createMarker: function() { return null; }, // Hide default markers
+                        lineOptions: {
+                            styles: [{ color: '#3498db', opacity: 0.7, weight: 5 }],
+                            addWaypoints: false
+                        },
+                        router: L.Routing.osrmv1({
+                            serviceUrl: 'https://router.project-osrm.org/route/v1',
+                            timeout: 10000 // Increase timeout
+                        })
+                    }).addTo(map);
+                    
+                    // Event listener to update route details
+                    currentRouteControl.on('routesfound', function(e) {
+                        // Remove the simple polyline once the route is found
+                        if (polyline) {
+                            map.removeLayer(polyline);
+                            polyline = null;
+                        }
+                        
+                        const distance = (e.routes[0].summary.totalDistance / 1000).toFixed(2);
+                        const duration = Math.round(e.routes[0].summary.totalTime / 60);
+                        document.getElementById("distance-panel").innerHTML = `Total Distance: ${distance} km (approx. ${duration} min)`;
+                        
+                        // Process route instructions for turns panel
+                        const instructions = e.routes[0].instructions;
+                        if (instructions && instructions.length > 0) {
+                            let turnsHtml = '';
+                            instructions.forEach((instruction, idx) => {
+                                if (idx < 10) { // Limit to first 10 instructions to save space
+                                    turnsHtml += `<div class="route-turn">
+                                        <strong>${instruction.text}</strong>
+                                        <div>Distance: ${(instruction.distance / 1000).toFixed(2)} km</div>
+                                    </div>`;
+                                }
+                            });
+                            
+                            document.getElementById('route-turns-content').innerHTML = turnsHtml;
+                            document.getElementById('route-turns-panel').style.display = 'block';
+                        } else {
+                            document.getElementById('route-turns-panel').style.display = 'none';
+                        }
+                    });
+                    
+                    // Handle routing errors
+                    currentRouteControl.on('routingerror', function(e) {
+                        console.error('Routing error:', e.error);
+                        // Keep the simple polyline if routing fails
+                        document.getElementById("distance-panel").innerHTML = `Routing unavailable - showing direct line`;
+                        document.getElementById('route-turns-panel').style.display = 'none';
+                        
+                        // Calculate approximate distance of the direct route
+                        let totalDistance = 0;
+                        for (let i = 0; i < sortedCoordinates.length - 1; i++) {
+                            totalDistance += haversineDistance(
+                                sortedCoordinates[i][0], sortedCoordinates[i][1],
+                                sortedCoordinates[i+1][0], sortedCoordinates[i+1][1]
+                            );
+                        }
+                        document.getElementById("distance-panel").innerHTML = `Approx. Distance: ${totalDistance.toFixed(2)} km (direct)`;
+                    });
+                } catch (error) {
+                    console.error('Error creating route:', error);
+                    // Keep the simple polyline as fallback
+                    document.getElementById("distance-panel").innerHTML = `Using direct line - ${error.message}`;
+                    document.getElementById('route-turns-panel').style.display = 'none';
+                }
+                
+                // Fit map to show all markers
+                const bounds = L.latLngBounds(coordinates);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            } else if (coordinates.length === 1) {
+                // If only one detection, center on it
+                map.setView(coordinates[0], 15);
+                document.getElementById("distance-panel").innerHTML = `Single Detection Point`;
+                document.getElementById('route-turns-panel').style.display = 'none';
+            }
+            
+            // Set timeline items and options
+            const timelineOptions = {
+                editable: false,
+                tooltip: {
+                    followMouse: true,
+                    overflowMethod: 'cap'
+                },
+                zoomable: true,
+                horizontalScroll: true,
+                minHeight: '150px',
+                margin: {
+                    item: {
+                        horizontal: 10,
+                        vertical: 8
+                    }
+                }
+            };
+            
+            timeline.setOptions(timelineOptions);
+            timeline.setItems(timelineItems);
+            
+            // Focus timeline on data range
+            if (timelineItems.length > 0) {
+                timeline.fit();
+            }
+            
+            // Add click event to timeline items
+            timeline.on('click', function(properties) {
+                if (properties.item) {
+                    const markerIndex = parseInt(properties.item) - 1;
+                    if (markerIndex >= 0 && markerIndex < markersGroup.getLayers().length) {
+                        // Open the popup for the clicked marker
+                        markersGroup.getLayers()[markerIndex].openPopup();
+                        // Center map on the marker
+                        map.setView(coordinates[markerIndex], 15);
+                        
+                        // Highlight the corresponding node in sidebar
+                        const nodes = document.querySelectorAll('.detection-node');
+                        nodes.forEach((node, idx) => {
+                            if (idx === markerIndex) {
+                                node.style.transform = 'translateY(-5px)';
+                                node.style.boxShadow = '0 8px 16px rgba(0,0,0,0.3)';
+                            } else {
+                                node.style.transform = 'translateY(0)';
+                                node.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                            }
+                        });
+                    }
+                }
+            });
+            
+            // Hide loading indicator
+            document.getElementById('loading-indicator').style.display = 'none';
+        }
+
+        // Haversine distance calculation function
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2); 
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            return R * c; // Distance in km
+        }
+
+        // Function to search for plate detections
+        function searchPlate() {
+            const plateNumber = document.getElementById('plate-input').value.trim();
+            if (!plateNumber) {
+                alert('Please enter a plate number');
+                return;
+            }
+            
+            // Show loading indicator
+            document.getElementById('loading-indicator').style.display = 'block';
+            
+            // Build query parameters
+            let params = new URLSearchParams();
+            params.append('plate_number', plateNumber);
+            
+            // Add date if provided
+            const searchDate = document.getElementById('date-input').value;
+            if (searchDate) params.append('search_date', searchDate);
+            
+            // Add fuzzy mode
+            const fuzzyMode = document.getElementById('fuzzy-mode').value;
+            params.append('fuzzy_mode', fuzzyMode);
+            
+            // Make API request
+            fetch(`/track-vehicle/?${params.toString()}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('API response:', data); // Debug log
+                    displayDetections(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    alert(`Error fetching vehicle data: ${error.message}`);
+                    document.getElementById('loading-indicator').style.display = 'none';
+                });
+        }
+
+        // Add event listener to search button
+        document.getElementById('search-btn').addEventListener('click', searchPlate);
+        
+        // Allow Enter key to trigger search
+        document.getElementById('plate-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchPlate();
+            }
+        });
+        
+        // Add click events to detection nodes
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.detection-node')) {
+                const node = e.target.closest('.detection-node');
+                const nodeNumber = node.querySelector('.node-number').textContent;
+                const markerIndex = parseInt(nodeNumber) - 1;
+                
+                if (markerIndex >= 0 && markerIndex < markersGroup.getLayers().length) {
+                    markersGroup.getLayers()[markerIndex].openPopup();
+                    
+                    // Get marker position
+                    const marker = markersGroup.getLayers()[markerIndex];
+                    const latlng = marker.getLatLng();
+                    map.setView([latlng.lat, latlng.lng], 15);
+                }
+            }
+        });
+        
+        // Make timeline scrollable horizontally
+        timelineContainer.addEventListener('wheel', function(e) {
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                timelineContainer.scrollLeft += e.deltaY;
+            }
+        });
+        
+        // Initialize with no data
+        document.getElementById('distance-panel').textContent = 'Enter a plate number to start tracking';
+    </script>
+</body>
+</html>
